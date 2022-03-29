@@ -26,7 +26,7 @@ void wait_until_value_four(int current_mux) {
 }
 
 void sem_action(int to_print, int current_mux) {
-    printf("\t %d \t from sem %d\n", to_print, current_mux + 1);
+    printf("\t%d\t\tfrom sem %d\n", to_print, current_mux + 1);
 }
   
 void* thread(void* arg)
