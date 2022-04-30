@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <semaphore.h>
 #include <unistd.h>
 #include <sys/sem.h>
 #define NUM_OF_SEM 5
