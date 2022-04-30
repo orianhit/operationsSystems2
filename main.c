@@ -1,83 +1,102 @@
 #include <stdio.h>
-#include <pthread.h>
+#include <stdlib.h>
 #include <semaphore.h>
 #include <unistd.h>
+#include <sys/sem.h>
+#define NUM_OF_SEM 5
 
-sem_t mutex[5];
-
-void increase_other_sems(int current_mux)
+union semun
 {
-    for (int i = 0; i < 5; i++)
-    {
-        if (i != current_mux)
-            sem_post(&mutex[i]);
+    int val;               /* Value for SETVAL */
+    struct semid_ds *buf;  /* Buffer for IPC_STAT, IPC_SET */
+    unsigned short *array; /* Array for GETALL, SETALL */
+    struct seminfo *__buf; /* Buffer for IPC_INFO
+                              (Linux-specific) */
+};
+
+void increase_other_sems(int semid, int sem_n )
+{
+    struct sembuf *sops = (struct sembuf *)malloc(NUM_OF_SEM * sizeof(struct sembuf *));
+    for (int i = 0; i < NUM_OF_SEM; i++) {  
+        sops[i].sem_num = i;
+        sops[i].sem_flg = 0;
+        if (i == sem_n) sops[i].sem_op = 0;
+        else sops[i].sem_op = 1;
     }
+    
+    semop(semid, sops, NUM_OF_SEM);
+    free(sops);
 }
 
-void decrease_mux_to_zero(int current_mux)
+void wait_until_value_four(int semid, int sem_n )
 {
-    for (int i = 1; i <= 4; i++)
-        sem_wait(&mutex[current_mux]);
+    struct sembuf *sops = (struct sembuf *)malloc(1 * sizeof(struct sembuf *));
+    sops[0].sem_num = sem_n;
+    sops[0].sem_flg = 0;
+    sops[0].sem_op = -4;
+
+    semop(semid, sops, 1);
+    free(sops);
 }
 
-void wait_until_value_four(int current_mux)
-{
-    int sem_value;
+int init_sems() {
+    union semun smearg1;
+    int semid = semget(IPC_PRIVATE, NUM_OF_SEM, 0600);
+    smearg1.array = (short unsigned *)malloc(NUM_OF_SEM * sizeof(short unsigned));
+    for (int i = 0; i < NUM_OF_SEM; i++)
+        smearg1.array[i] = 4 - i;
 
-    do
-    {
-        sem_getvalue(&mutex[current_mux], &sem_value);
-    } while (sem_value < 4);
+    semctl(semid, 0, SETALL, smearg1);
+    return semid;
 }
 
-void sem_action(int to_print, int current_mux)
+void sem_action(int to_print, int sem_n)
 {
-    printf("\t%d\t\tfrom sem %d\n", to_print, current_mux + 1);
+    printf("%d\t\tfrom sem %d\n", to_print, sem_n + 1);
 }
 
-void *print_with_five(void *arg)
-{
-    int current_mux = *((int *)arg);
-    int next_to_print;
-    int counter = 0;
+void print_with_all(int semid, int sem_n) {
+        int counter = 0;
+        int to_print = -1;
+        while (to_print + NUM_OF_SEM <= 100) {
+            to_print = counter * NUM_OF_SEM + (sem_n + 1);
+            wait_until_value_four(semid, sem_n);
 
-    while (1)
-    {
-        next_to_print = counter * 5 + (current_mux + 1);
+            sem_action(to_print, sem_n);
 
-        if (next_to_print > 100)
-            break;
+            increase_other_sems(semid, sem_n);
 
-        wait_until_value_four(current_mux);
-
-        decrease_mux_to_zero(current_mux);
-
-        sem_action(next_to_print, current_mux);
-
-        increase_other_sems(current_mux);
-
-        counter++;
-    }
+            counter++;
+        }
 }
 
 int main()
 {
-    for (int i = 0; i < 5; i++)
-        sem_init(&mutex[i], 0, 4 - i);
+    int semid = init_sems();
 
-    pthread_t t[5];
-    int threadNum[5] = {0, 1, 2, 3, 4};
-
-    for (int i = 0; i < 5; i++)
-    {
-        pthread_create(&t[i], NULL, print_with_five, &threadNum[i]);
+    if (fork() == 0) {
+        print_with_all(semid, 0);
+    } else {
+        if (fork() == 0) {
+            print_with_all(semid, 1);
+            exit(127);
+        } else {
+            if (fork() == 0) {
+                print_with_all(semid, 2);
+                exit(127);
+            } else {
+                if (fork() == 0) {
+                    print_with_all(semid, 3);
+                    exit(127);
+                } else {
+                    print_with_all(semid, 4);
+                    semctl(semid, 0 , IPC_RMID, 1);
+                }
+            }
+        }
     }
 
-    for (int i = 0; i < 5; i++)
-        pthread_join(t[i], NULL);
-
-    for (int i = 0; i < 5; i++)
-        sem_destroy(&mutex[i]);
+    
 
     return 0;
 }
