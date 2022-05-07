@@ -67,35 +67,21 @@ void print_with_all(int semid, int sem_n) {
 
             counter++;
         }
+        semctl(semid, 0 , IPC_RMID, 1);
+        // if (sem_n == 4) 
 }
 
 int main()
 {
     int semid = init_sems();
 
-    if (fork() == 0) {
-        print_with_all(semid, 0);
-    } else {
+    for(int i =0; i < 4; i++) {
         if (fork() == 0) {
-            print_with_all(semid, 1);
-            exit(127);
-        } else {
-            if (fork() == 0) {
-                print_with_all(semid, 2);
-                exit(127);
-            } else {
-                if (fork() == 0) {
-                    print_with_all(semid, 3);
-                    exit(127);
-                } else {
-                    print_with_all(semid, 4);
-                    semctl(semid, 0 , IPC_RMID, 1);
-                }
-            }
+            print_with_all(semid, i);
+            exit(1);
         }
     }
-
-    
+    print_with_all(semid, 4);
 
     return 0;
 }
