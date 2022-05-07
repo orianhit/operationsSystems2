@@ -67,8 +67,7 @@ void print_with_all(int semid, int sem_n) {
 
             counter++;
         }
-        semctl(semid, 0 , IPC_RMID, 1);
-        // if (sem_n == 4) 
+        if (sem_n == 4) semctl(semid, 0 , IPC_RMID, 1);
 }
 
 int main()
